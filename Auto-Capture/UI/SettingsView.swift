@@ -94,9 +94,9 @@ struct SettingsView: View {
             }
 
             Slider(
-                value: Binding(
-                    get: { Float(viewModel.settings.stabilityFrames) },
-                    set: { viewModel.updateStabilityFrames(Int($0)) }
+                value: Binding<Double>(
+                    get: { Double(viewModel.settings.stabilityFrames) },
+                    set: { viewModel.updateStabilityFrames(Int($0.rounded())) }
                 ),
                 in: 1...20,
                 step: 1
@@ -118,9 +118,9 @@ struct SettingsView: View {
             }
 
             Slider(
-                value: Binding(
-                    get: { Float(viewModel.settings.shutterDelay) },
-                    set: { viewModel.updateShutterDelay(TimeInterval($0)) }
+                value: Binding<Double>(
+                    get: { viewModel.settings.shutterDelay },
+                    set: { viewModel.updateShutterDelay($0) }
                 ),
                 in: 0.1...5.0,
                 step: 0.1
@@ -142,9 +142,9 @@ struct SettingsView: View {
             }
 
             Slider(
-                value: Binding(
-                    get: { viewModel.settings.jpegQuality },
-                    set: { viewModel.updateJpegQuality($0) }
+                value: Binding<Double>(
+                    get: { Double(viewModel.settings.jpegQuality) },
+                    set: { viewModel.updateJpegQuality(Float($0)) }
                 ),
                 in: 0.1...1.0,
                 step: 0.05
@@ -157,7 +157,7 @@ struct SettingsView: View {
     }
 
     private var exposureLockToggle: some View {
-        Toggle("Lock Exposure", isOn: Binding(
+        Toggle("Lock Exposure", isOn: Binding<Bool>(
             get: { viewModel.settings.lockExposure },
             set: { viewModel.updateLockExposure($0) }
         ))
@@ -175,9 +175,9 @@ struct SettingsView: View {
                 }
                 
                 Slider(
-                    value: Binding(
-                        get: { viewModel.settings.confidenceThreshold },
-                        set: { viewModel.updateConfidenceThreshold($0) }
+                    value: Binding<Double>(
+                        get: { Double(viewModel.settings.confidenceThreshold) },
+                        set: { viewModel.updateConfidenceThreshold(Float($0)) }
                     ),
                     in: 0.5...1.0,
                     step: 0.05
@@ -202,9 +202,9 @@ struct SettingsView: View {
                 }
                 
                 Slider(
-                    value: Binding(
-                        get: { viewModel.settings.guideOpacity },
-                        set: { viewModel.updateGuideOpacity($0) }
+                    value: Binding<Double>(
+                        get: { Double(viewModel.settings.guideOpacity) },
+                        set: { viewModel.updateGuideOpacity(Float($0)) }
                     ),
                     in: 0.0...1.0,
                     step: 0.1
@@ -226,10 +226,13 @@ struct SettingsView: View {
     private var exportSettingsSection: some View {
         Section("Export Settings") {
             // Export Target
-            Picker("Export Target", selection: Binding(
-                get: { viewModel.settings.exportTarget },
-                set: { viewModel.updateExportTarget($0) }
-            )) {
+            Picker(
+                "Export Target",
+                selection: Binding<ExportTarget>(
+                    get: { viewModel.settings.exportTarget },
+                    set: { viewModel.updateExportTarget($0) }
+                )
+            ) {
                 ForEach(ExportTarget.allCases, id: \.self) { target in
                     HStack {
                         Image(systemName: target.iconName)
@@ -254,9 +257,9 @@ struct SettingsView: View {
                 }
                 
                 Slider(
-                    value: Binding(
-                        get: { viewModel.settings.thermalThreshold },
-                        set: { viewModel.updateThermalThreshold($0) }
+                    value: Binding<Double>(
+                        get: { Double(viewModel.settings.thermalThreshold) },
+                        set: { viewModel.updateThermalThreshold(Float($0)) }
                     ),
                     in: 0.0...1.0,
                     step: 0.1

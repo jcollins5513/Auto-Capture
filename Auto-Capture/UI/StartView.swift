@@ -58,11 +58,11 @@ struct StartView: View {
         )
     }
 
+    @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
         ToolbarItemGroup(placement: .navigationBarTrailing) {
             Button("Settings", action: showSettings)
         }
-
         ToolbarItemGroup(placement: .navigationBarLeading) {
             Button("History", action: showHistory)
         }
