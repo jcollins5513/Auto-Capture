@@ -1,0 +1,348 @@
+import SwiftUI
+import OSLog
+import Combine
+
+/// SwiftUI view for configuring session settings
+struct SettingsView: View {
+    
+    // MARK: - Properties
+    
+    @StateObject private var viewModel = SettingsViewModel()
+    @Environment(\.dismiss) private var dismiss
+    
+    private let logger = Logger(subsystem: "AutoCapture", category: "SettingsView")
+    
+    // MARK: - Body
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                // Capture Settings Section
+                captureSettingsSection
+                
+                // ML Settings Section
+                mlSettingsSection
+                
+                // UI Settings Section
+                uiSettingsSection
+                
+                // Export Settings Section
+                exportSettingsSection
+                
+                // Advanced Settings Section
+                advancedSettingsSection
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        Task {
+                            await viewModel.saveSettings()
+                            dismiss()
+                        }
+                    }
+                    .disabled(!viewModel.hasChanges)
+                }
+            }
+            .alert("Error", isPresented: $viewModel.showingError) {
+                Button("OK") { }
+            } message: {
+                Text(viewModel.errorMessage)
+            }
+        }
+        .onAppear {
+            viewModel.loadSettings()
+        }
+    }
+    
+    // MARK: - View Sections
+    
+    private var captureSettingsSection: some View {
+        Section("Capture Settings") {
+            // Stability Frames
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Stability Frames")
+                    Spacer()
+                    Text("\(viewModel.settings.stabilityFrames)")
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { Float(viewModel.settings.stabilityFrames) },
+                        set: { viewModel.updateStabilityFrames(Int($0)) }
+                    ),
+                    in: 1...20,
+                    step: 1
+                )
+                
+                Text(viewModel.settings.stabilityFramesDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Shutter Delay
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Shutter Delay")
+                    Spacer()
+                    Text(viewModel.settings.shutterDelayString)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { Float(viewModel.settings.shutterDelay) },
+                        set: { viewModel.updateShutterDelay(TimeInterval($0)) }
+                    ),
+                    in: 0.1...5.0,
+                    step: 0.1
+                )
+                
+                Text("Delay before capture after stability confirmed")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // JPEG Quality
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("JPEG Quality")
+                    Spacer()
+                    Text(viewModel.settings.jpegQualityString)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { viewModel.settings.jpegQuality },
+                        set: { viewModel.updateJpegQuality($0) }
+                    ),
+                    in: 0.1...1.0,
+                    step: 0.05
+                )
+                
+                Text(viewModel.settings.jpegQualityDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Exposure Lock
+            Toggle("Lock Exposure", isOn: Binding(
+                get: { viewModel.settings.lockExposure },
+                set: { viewModel.updateLockExposure($0) }
+            ))
+        }
+    }
+    
+    private var mlSettingsSection: some View {
+        Section("ML Settings") {
+            // Confidence Threshold
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Confidence Threshold")
+                    Spacer()
+                    Text(viewModel.settings.confidenceThresholdString)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { viewModel.settings.confidenceThreshold },
+                        set: { viewModel.updateConfidenceThreshold($0) }
+                    ),
+                    in: 0.5...1.0,
+                    step: 0.05
+                )
+                
+                Text(viewModel.settings.confidenceThresholdDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var uiSettingsSection: some View {
+        Section("UI Settings") {
+            // Guide Opacity
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Guide Opacity")
+                    Spacer()
+                    Text(viewModel.settings.guideOpacityString)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { viewModel.settings.guideOpacity },
+                        set: { viewModel.updateGuideOpacity($0) }
+                    ),
+                    in: 0.0...1.0,
+                    step: 0.1
+                )
+                
+                Text(viewModel.settings.guideOpacityDescription)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Voice Prompts
+            Toggle("Voice Prompts", isOn: Binding(
+                get: { viewModel.settings.voicePrompts },
+                set: { viewModel.updateVoicePrompts($0) }
+            ))
+        }
+    }
+    
+    private var exportSettingsSection: some View {
+        Section("Export Settings") {
+            // Export Target
+            Picker("Export Target", selection: Binding(
+                get: { viewModel.settings.exportTarget },
+                set: { viewModel.updateExportTarget($0) }
+            )) {
+                ForEach(ExportTarget.allCases, id: \.self) { target in
+                    HStack {
+                        Image(systemName: target.iconName)
+                        Text(target.description)
+                    }
+                    .tag(target)
+                }
+            }
+            .pickerStyle(MenuPickerStyle())
+        }
+    }
+    
+    private var advancedSettingsSection: some View {
+        Section("Advanced Settings") {
+            // Thermal Threshold
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Thermal Threshold")
+                    Spacer()
+                    Text(viewModel.settings.thermalThresholdDescription)
+                        .foregroundColor(.secondary)
+                }
+                
+                Slider(
+                    value: Binding(
+                        get: { viewModel.settings.thermalThreshold },
+                        set: { viewModel.updateThermalThreshold($0) }
+                    ),
+                    in: 0.0...1.0,
+                    step: 0.1
+                )
+                
+                Text("Device temperature threshold for performance throttling")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            // Reset to Defaults
+            Button("Reset to Defaults") {
+                viewModel.resetToDefaults()
+            }
+            .foregroundColor(.red)
+        }
+    }
+}
+
+// MARK: - ViewModel
+
+@MainActor
+class SettingsViewModel: ObservableObject {
+    
+    // MARK: - Published Properties
+    
+    @Published var settings = SessionSettings.default
+    @Published var originalSettings = SessionSettings.default
+    @Published var showingError = false
+    @Published var errorMessage = ""
+    
+    // MARK: - Computed Properties
+    
+    var hasChanges: Bool {
+        return settings != originalSettings
+    }
+    
+    // MARK: - Methods
+    
+    func loadSettings() {
+        // TODO: Load settings from UserDefaults
+        settings = SessionSettings.default
+        originalSettings = settings
+        logger.info("Settings loaded")
+    }
+    
+    func saveSettings() async {
+        do {
+            // TODO: Save settings to UserDefaults
+            logger.info("Settings saved")
+            originalSettings = settings
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
+    }
+    
+    func resetToDefaults() {
+        settings = SessionSettings.default
+    }
+    
+    // MARK: - Update Methods
+    
+    func updateStabilityFrames(_ value: Int) {
+        settings = settings.updating(stabilityFrames: value)
+    }
+    
+    func updateConfidenceThreshold(_ value: Float) {
+        settings = settings.updating(confidenceThreshold: value)
+    }
+    
+    func updateShutterDelay(_ value: TimeInterval) {
+        settings = settings.updating(shutterDelay: value)
+    }
+    
+    func updateLockExposure(_ value: Bool) {
+        settings = settings.updating(lockExposure: value)
+    }
+    
+    func updateJpegQuality(_ value: Float) {
+        settings = settings.updating(jpegQuality: value)
+    }
+    
+    func updateGuideOpacity(_ value: Float) {
+        settings = settings.updating(guideOpacity: value)
+    }
+    
+    func updateVoicePrompts(_ value: Bool) {
+        settings = settings.updating(voicePrompts: value)
+    }
+    
+    func updateExportTarget(_ value: ExportTarget) {
+        settings = settings.updating(exportTarget: value)
+    }
+    
+    func updateThermalThreshold(_ value: Float) {
+        settings = settings.updating(thermalThreshold: value)
+    }
+    
+    private let logger = Logger(subsystem: "AutoCapture", category: "SettingsViewModel")
+}
+
+// MARK: - Preview
+
+struct SettingsView_Previews: PreviewProvider {
+    static var previews: some View {
+        SettingsView()
+    }
+}

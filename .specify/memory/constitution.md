@@ -1,50 +1,77 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+Version change: 1.0.0 → 1.0.0 (initial creation)
+Modified principles: N/A (new constitution)
+Added sections: Architecture Constraints, Safety Rules, Error Handling, Performance Policy
+Removed sections: N/A
+Templates requiring updates:
+  ✅ plan-template.md (Constitution Check section updated)
+  ✅ spec-template.md (Auto-Capture specific requirements)
+  ✅ tasks-template.md (iOS/SwiftUI task patterns)
+Follow-up TODOs: None
+-->
+
+# Auto-Capture Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Offline-First
+All capture and review functionality MUST work without network connectivity. ML inference MUST run on-device using Core ML. No cloud dependencies during normal operation. Export and upload are explicit opt-in actions only.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Privacy-by-Default  
+Images and metadata MUST remain on device unless user explicitly exports. No background analytics, telemetry, or tracking by default. If telemetry is added later, it MUST be off by default and fully documented.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. Determinism
+Same inputs MUST yield the same outputs. No hidden randomness in capture flow. State machine MUST be deterministic. File naming MUST be predictable and ordered.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Safety
+MUST be used only in controlled areas. Clear prompts and minimal driver attention burden. Voice prompts to minimize distraction. Block capture at critical device temperatures. Disable flash by default.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Performance
+Preview MUST maintain ≥30 fps on iPhone 13+. Inference decisions ≤150ms typical, ≤300ms p95. Complete 8-image session ≤5 minutes in booth conditions. Thermal awareness and frame drop handling required.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### VI. Maintainability
+Small, focused modules with clear contracts. Tests before features. Unit tests for naming, EXIF, state transitions. UI tests for complete flows. On-device performance validation required.
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+## Architecture Constraints
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+**UI**: SwiftUI (iOS 17+)  
+**Camera**: AVFoundation (`AVCaptureSession`, `AVCapturePhotoOutput`), 4:3 stills  
+**ML**: Core ML + Vision (`VNCoreMLRequest`) image classification with 8 classes  
+**State**: Deterministic finite state machine controlling capture order and overrides  
+**Storage**: App Documents → `Sessions/{stock}-{YYYYMMDD-HHmmss}/`  
+**Naming**: `{01..08}_{Viewpoint}_{YYYYMMDD-HHmmss}.jpg`  
+**Metadata**: EXIF contains stock, viewpoint, sessionId, app version  
+**Settings**: UserDefaults (stability frames, confidence, delay, AE/WB lock, JPEG quality, guide opacity, voice prompts, export target)  
+**Export**: ZIP + Share Sheet. Optional S3/WebDAV via URLSession. Credentials in Keychain.
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+## Safety Rules
+
+MUST show "Use only in controlled space" banner on first run and in Settings. Voice prompts minimize driver distraction. No long on-screen text during motion. Block capture if device temperature reaches critical thresholds. Disable flash by default to avoid glare unless user enables it.
+
+## Error Handling
+
+Low confidence → "Adjust position" banner, no capture trigger. Storage full → block capture, prompt to export or free space. Camera denied → single action to open Settings. All errors MUST be recoverable without data loss.
+
+## Performance Policy
+
+Throttle inference (e.g., every k frames) if frame drops occur. Lock AE/WB before shutter then restore. Use background queue for JPEG encoding and ZIP. Monitor thermal state and gracefully degrade if needed.
+
+## Quality Bars
+
+- Preview frame rate: ≥30 fps on iPhone 13+
+- Inference decision latency: ≤150ms typical, ≤300ms p95  
+- Session time: 8 images in ≤5 minutes in booth conditions
+- Classifier accuracy: ≥95% on held-out booth dataset
+- Data integrity: 0 corrupted files across 1,000 captures
+- Crash safety: no data loss after unexpected termination
+
+## Development Workflow
+
+PRs MUST include: summary, risk assessment, test evidence (screens or logs), and updated docs if behavior changes. No PR merges that violate this Constitution without an amendment. Unit tests for naming, EXIF, state transitions. UI tests for flow. On-device perf checks for p95 latency.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Constitution supersedes all other practices. Changes to principles, non-goals, quality bars, or architecture constraints require: (1) dedicated PR, (2) rationale and trade-off record in PR description, (3) updates to Plan/Spec/Tasks as needed. Approval from project owner required. All PRs/reviews must verify compliance. Complexity must be justified.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2025-01-27 | **Last Amended**: 2025-01-27

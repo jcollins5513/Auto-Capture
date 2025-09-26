@@ -1,8 +1,8 @@
 
-# Implementation Plan: [FEATURE]
+# Implementation Plan: Auto-Capture Fixed Mount iPhone App
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `001-fixed-mount-iphone` | **Date**: 2025-01-27 | **Spec**: [spec.md](./spec.md)
+**Input**: Feature specification from `/specs/001-fixed-mount-iphone/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
@@ -31,31 +31,31 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-[Extract from feature spec: primary requirement + technical approach from research]
+Auto-Capture is a fixed-mount iPhone app that automatically captures eight standard car angles using on-device ML recognition. The app provides hands-free photography with SwiftUI interface, AVFoundation camera pipeline, Core ML classification, and deterministic state management. All processing happens offline with optional export capabilities.
 
 ## Technical Context
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: Swift 5.9+, iOS 17+
+**Primary Dependencies**: SwiftUI, AVFoundation, Vision, Core ML, OSLog
+**Storage**: App Documents directory, UserDefaults for settings, Keychain for credentials
+**Testing**: XCTest for unit tests, XCUITest for UI tests
+**Target Platform**: iOS 17+, iPhone 13+ recommended for ML throughput
+**Project Type**: Mobile (iOS native app)
+**Performance Goals**: 30fps preview, ≤150ms inference latency typical, ≤300ms p95, 8 images in ≤5 minutes
+**Constraints**: Offline-capable, ≤50MB ML model, no Photos library dependency, deterministic state machine
+**Scale/Scope**: Single-user car dealership booth environment, 8 viewpoints per session, local storage only
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
 ### Auto-Capture Constitution Gates:
-- [ ] **Offline-First**: All capture/review functionality works without network. ML inference uses Core ML only.
-- [ ] **Privacy-by-Default**: Images/metadata stay on device unless user explicitly exports. No background analytics.
-- [ ] **Determinism**: Same inputs yield same outputs. No hidden randomness in capture flow.
-- [ ] **Safety**: Clear prompts, minimal driver distraction. Thermal monitoring and controlled area usage.
-- [ ] **Performance**: ≥30 fps preview on iPhone 13+, ≤150ms inference latency typical.
-- [ ] **Maintainability**: Small modules, tests before features, unit tests for naming/EXIF/state transitions.
-- [ ] **Architecture Compliance**: SwiftUI (iOS 17+), AVFoundation, Core ML + Vision, deterministic state machine.
-- [ ] **Quality Bars**: ≥95% classifier accuracy, 0 corrupted files across 1,000 captures, no data loss on crash.
+- [x] **Offline-First**: All capture/review functionality works without network. ML inference uses Core ML only.
+- [x] **Privacy-by-Default**: Images/metadata stay on device unless user explicitly exports. No background analytics.
+- [x] **Determinism**: Same inputs yield same outputs. No hidden randomness in capture flow.
+- [x] **Safety**: Clear prompts, minimal driver distraction. Thermal monitoring and controlled area usage.
+- [x] **Performance**: ≥30 fps preview on iPhone 13+, ≤150ms inference latency typical.
+- [x] **Maintainability**: Small modules, tests before features, unit tests for naming/EXIF/state transitions.
+- [x] **Architecture Compliance**: SwiftUI (iOS 17+), AVFoundation, Core ML + Vision, deterministic state machine.
+- [x] **Quality Bars**: ≥95% classifier accuracy, 0 corrupted files across 1,000 captures, no data loss on crash.
 
 ## Project Structure
 
@@ -78,43 +78,46 @@ specs/[###-feature]/
   not include Option labels.
 -->
 ```
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+Auto-Capture/
+├── CameraPipeline/
+│   ├── CaptureSessionController.swift
+│   └── PhotoCaptureManager.swift
+├── ML/
+│   ├── ViewpointClassifier.swift
+│   └── StabilityGate.swift
+├── Flow/
+│   └── CaptureStateMachine.swift
+├── Storage/
+│   ├── SessionStore.swift
+│   └── Exporter.swift
+├── UI/
+│   ├── StartView.swift
+│   ├── LiveCaptureView.swift
+│   ├── ReviewView.swift
+│   └── SettingsView.swift
+├── Models/
+│   ├── CaptureSession.swift
+│   ├── PhotoCapture.swift
+│   └── Viewpoint.swift
+├── Utils/
+│   ├── EXIFHandler.swift
+│   ├── ErrorHandler.swift
+│   └── ThermalMonitor.swift
+└── Resources/
+    └── MLModel.mlmodel
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+Auto-CaptureTests/
+├── FileNamingTests.swift
+├── EXIFTests.swift
+├── StateMachineTests.swift
+└── PerformanceTests.swift
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+Auto-CaptureUITests/
+├── CaptureFlowTests.swift
+└── ReviewExportTests.swift
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: iOS native app structure with modular organization. Each major functional area (Camera, ML, Flow, Storage, UI) has its own directory. Models and Utils are shared across modules. Tests are organized by type (unit vs UI) with specific focus on constitutional requirements like file naming, EXIF handling, and state machine behavior.
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
@@ -210,18 +213,18 @@ directories captured above]
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
+- [x] Phase 0: Research complete (/plan command)
+- [x] Phase 1: Design complete (/plan command)
 - [ ] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS
+- [x] Post-Design Constitution Check: PASS
+- [x] All NEEDS CLARIFICATION resolved
+- [x] Complexity deviations documented
 
 ---
 *Based on Constitution v1.0.0 - See `/memory/constitution.md`*
