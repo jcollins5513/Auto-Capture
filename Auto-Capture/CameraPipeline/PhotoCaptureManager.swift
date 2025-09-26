@@ -14,6 +14,7 @@ final class PhotoCaptureManager: NSObject {
     
     private var photoOutput: AVCapturePhotoOutput?
     private var captureCompletion: ((Result<PhotoCapture, PhotoCaptureError>) -> Void)?
+    private var pendingPhotoCapture: PhotoCapture?
     
     // MARK: - Initialization
     
@@ -67,11 +68,15 @@ final class PhotoCaptureManager: NSObject {
             )
         )
         
+        pendingPhotoCapture = photoCapture
+
         return try await withCheckedThrowingContinuation { continuation in
-            self.captureCompletion = { result in
+            self.captureCompletion = { [weak self] result in
+                self?.pendingPhotoCapture = nil
+                self?.captureCompletion = nil
                 continuation.resume(with: result)
             }
-            
+
             // Capture photo
             photoOutput.capturePhoto(with: photoSettings, delegate: self)
         }
@@ -207,34 +212,25 @@ extension PhotoCaptureManager: AVCapturePhotoCaptureDelegate {
         if let error = error {
             logger.error("Photo capture failed: \(error.localizedDescription)")
             captureCompletion?(.failure(.captureFailed(error)))
+            pendingPhotoCapture = nil
             return
         }
-        
+
+        guard let photoCapture = pendingPhotoCapture else {
+            logger.error("Photo capture finished with no pending context")
+            captureCompletion?(.failure(.invalidPhoto))
+            return
+        }
+
         // Process the captured photo
         Task {
             do {
-                // Create a temporary photo capture for processing
-                let tempPhoto = PhotoCapture(
-                    sessionId: UUID(), // Will be updated
-                    viewpoint: .front, // Will be updated
-                    order: 1, // Will be updated
-                    filePath: "",
-                    confidence: 0.0, // Will be updated
-                    exifData: EXIFData(
-                        stockNumber: "",
-                        viewpoint: "",
-                        sessionId: "",
-                        appVersion: "",
-                        captureTimestamp: Date(),
-                        deviceModel: "",
-                        iosVersion: ""
-                    )
-                )
-                
-                let processedPhoto = try await processCapturedPhoto(photo, photoCapture: tempPhoto)
+                let processedPhoto = try await processCapturedPhoto(photo, photoCapture: photoCapture)
+                pendingPhotoCapture = nil
                 captureCompletion?(.success(processedPhoto))
             } catch {
                 logger.error("Photo processing failed: \(error.localizedDescription)")
+                pendingPhotoCapture = nil
                 captureCompletion?(.failure(.processingFailed(error)))
             }
         }
