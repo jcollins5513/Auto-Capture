@@ -1,69 +1,91 @@
-import SwiftUI
-import OSLog
-import Combine
+//
+//  StartView.swift
+//  Auto-Capture
+//
+//  Created by Justin Collins on 9/25/25.
+//
 
-/// SwiftUI view for starting a new capture session
+import Combine
+import OSLog
+import SwiftUI
+
 struct StartView: View {
-    
     // MARK: - Properties
-    
+
     @StateObject private var viewModel = StartViewModel()
     @State private var showingSettings = false
     @State private var showingSessionHistory = false
-    
+
     private let logger = Logger(subsystem: "AutoCapture", category: "StartView")
-    
+
     // MARK: - Body
-    
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
-                // Header
-                headerSection
-                
-                // Stock number input
-                stockNumberSection
-                
-                // Settings preview
-                settingsPreviewSection
-                
-                // Action buttons
-                actionButtonsSection
-                
-                Spacer()
-            }
-            .padding()
-            .navigationTitle("Auto-Capture")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Settings") {
-                        showingSettings = true
-                    }
-                }
-                
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("History") {
-                        showingSessionHistory = true
-                    }
-                }
-            }
-            .sheet(isPresented: $showingSettings) {
-                SettingsView()
-            }
-            .sheet(isPresented: $showingSessionHistory) {
-                SessionHistoryView()
-            }
-            .alert("Error", isPresented: $viewModel.showingError) {
-                Button("OK") { }
-            } message: {
-                Text(viewModel.errorMessage)
-            }
+            mainContent
         }
     }
-    
+
+    private var mainContent: some View {
+        VStack(spacing: 24) {
+            headerSection
+            stockNumberSection
+            settingsPreviewSection
+            actionButtonsSection
+            Spacer()
+        }
+        .padding()
+        .navigationTitle("Auto-Capture")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar { toolbarContent }
+        .sheet(
+            isPresented: $showingSettings,
+            content: settingsSheetContent
+        )
+        .sheet(
+            isPresented: $showingSessionHistory,
+            content: sessionHistorySheetContent
+        )
+        .alert(
+            "Error",
+            isPresented: $viewModel.showingError,
+            actions: {
+                Button("OK", role: .cancel) { }
+            },
+            message: {
+                Text(viewModel.errorMessage)
+            }
+        )
+    }
+
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .navigationBarTrailing) {
+            Button("Settings", action: showSettings)
+        }
+
+        ToolbarItemGroup(placement: .navigationBarLeading) {
+            Button("History", action: showHistory)
+        }
+    }
+
+    private func settingsSheetContent() -> SettingsView {
+        SettingsView()
+    }
+
+    private func sessionHistorySheetContent() -> SessionHistoryView {
+        SessionHistoryView()
+    }
+
+    private func showSettings() {
+        showingSettings = true
+    }
+
+    private func showHistory() {
+        showingSessionHistory = true
+    }
+
     // MARK: - View Components
-    
+
     private var headerSection: some View {
         VStack(spacing: 16) {
             Image(systemName: "camera.viewfinder")
@@ -80,7 +102,7 @@ struct StartView: View {
                 .multilineTextAlignment(.center)
         }
     }
-    
+
     private var stockNumberSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Vehicle Stock Number")
@@ -101,7 +123,7 @@ struct StartView: View {
             }
         }
     }
-    
+
     private var settingsPreviewSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Session Settings")
@@ -142,42 +164,46 @@ struct StartView: View {
         .background(Color(.systemGray6))
         .cornerRadius(12)
     }
-    
+
     private var actionButtonsSection: some View {
         VStack(spacing: 16) {
-            Button(action: {
-                Task {
-                    await viewModel.startSession()
-                }
-            }) {
-                HStack {
-                    Image(systemName: "play.circle.fill")
-                    Text("Start Session")
-                }
-                .font(.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(viewModel.canStartSession ? Color.blue : Color.gray)
-                .cornerRadius(12)
-            }
-            .disabled(!viewModel.canStartSession)
-            
-            Button(action: {
-                showingSettings = true
-            }) {
-                HStack {
-                    Image(systemName: "gearshape.fill")
-                    Text("Configure Settings")
-                }
-                .font(.subheadline)
-                .foregroundColor(.blue)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(12)
-            }
+            Button(action: handleStartSessionTap, label: startSessionLabel)
+                .disabled(!viewModel.canStartSession)
+
+            Button(action: showSettings, label: configureSettingsLabel)
         }
+    }
+
+    private func handleStartSessionTap() {
+        Task {
+            await viewModel.startSession()
+        }
+    }
+
+    private func startSessionLabel() -> some View {
+        HStack {
+            Image(systemName: "play.circle.fill")
+            Text("Start Session")
+        }
+        .font(.headline)
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(viewModel.canStartSession ? Color.blue : Color.gray)
+        .cornerRadius(12)
+    }
+
+    private func configureSettingsLabel() -> some View {
+        HStack {
+            Image(systemName: "gearshape.fill")
+            Text("Configure Settings")
+        }
+        .font(.subheadline)
+        .foregroundColor(.blue)
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(12)
     }
 }
 
@@ -185,9 +211,8 @@ struct StartView: View {
 
 @MainActor
 class StartViewModel: ObservableObject {
-    
     // MARK: - Published Properties
-    
+
     @Published var stockNumber = ""
     @Published var stockNumberError = ""
     @Published var settings = SessionSettings.default
@@ -198,7 +223,7 @@ class StartViewModel: ObservableObject {
     // MARK: - Computed Properties
     
     var canStartSession: Bool {
-        return !stockNumber.isEmpty && stockNumberError.isEmpty && !isLoading
+        !stockNumber.isEmpty && stockNumberError.isEmpty && !isLoading
     }
     
     // MARK: - Methods

@@ -1,12 +1,18 @@
-import SwiftUI
-import OSLog
+//
+//  SettingsView.swift
+//  Auto-Capture
+//
+//  Created by Justin Collins on 9/25/25.
+//
+
 import Combine
+import OSLog
+import SwiftUI
 
 /// SwiftUI view for configuring session settings
 struct SettingsView: View {
-    
     // MARK: - Properties
-    
+
     @StateObject private var viewModel = SettingsViewModel()
     @Environment(\.dismiss) private var dismiss
     
@@ -51,11 +57,16 @@ struct SettingsView: View {
                     .disabled(!viewModel.hasChanges)
                 }
             }
-            .alert("Error", isPresented: $viewModel.showingError) {
-                Button("OK") { }
-            } message: {
-                Text(viewModel.errorMessage)
-            }
+            .alert(
+                "Error",
+                isPresented: $viewModel.showingError,
+                actions: {
+                    Button("OK", role: .cancel) { }
+                },
+                message: {
+                    Text(viewModel.errorMessage)
+                }
+            )
         }
         .onAppear {
             viewModel.loadSettings()
@@ -66,81 +77,90 @@ struct SettingsView: View {
     
     private var captureSettingsSection: some View {
         Section("Capture Settings") {
-            // Stability Frames
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Stability Frames")
-                    Spacer()
-                    Text("\(viewModel.settings.stabilityFrames)")
-                        .foregroundColor(.secondary)
-                }
-                
-                Slider(
-                    value: Binding(
-                        get: { Float(viewModel.settings.stabilityFrames) },
-                        set: { viewModel.updateStabilityFrames(Int($0)) }
-                    ),
-                    in: 1...20,
-                    step: 1
-                )
-                
-                Text(viewModel.settings.stabilityFramesDescription)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Shutter Delay
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("Shutter Delay")
-                    Spacer()
-                    Text(viewModel.settings.shutterDelayString)
-                        .foregroundColor(.secondary)
-                }
-                
-                Slider(
-                    value: Binding(
-                        get: { Float(viewModel.settings.shutterDelay) },
-                        set: { viewModel.updateShutterDelay(TimeInterval($0)) }
-                    ),
-                    in: 0.1...5.0,
-                    step: 0.1
-                )
-                
-                Text("Delay before capture after stability confirmed")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            // JPEG Quality
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("JPEG Quality")
-                    Spacer()
-                    Text(viewModel.settings.jpegQualityString)
-                        .foregroundColor(.secondary)
-                }
-                
-                Slider(
-                    value: Binding(
-                        get: { viewModel.settings.jpegQuality },
-                        set: { viewModel.updateJpegQuality($0) }
-                    ),
-                    in: 0.1...1.0,
-                    step: 0.05
-                )
-                
-                Text(viewModel.settings.jpegQualityDescription)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            // Exposure Lock
-            Toggle("Lock Exposure", isOn: Binding(
-                get: { viewModel.settings.lockExposure },
-                set: { viewModel.updateLockExposure($0) }
-            ))
+            stabilityFramesControl
+            shutterDelayControl
+            jpegQualityControl
+            exposureLockToggle
         }
+    }
+
+    private var stabilityFramesControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Stability Frames")
+                Spacer()
+                Text("\(viewModel.settings.stabilityFrames)")
+                    .foregroundColor(.secondary)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { Float(viewModel.settings.stabilityFrames) },
+                    set: { viewModel.updateStabilityFrames(Int($0)) }
+                ),
+                in: 1...20,
+                step: 1
+            )
+
+            Text(viewModel.settings.stabilityFramesDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var shutterDelayControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Shutter Delay")
+                Spacer()
+                Text(viewModel.settings.shutterDelayString)
+                    .foregroundColor(.secondary)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { Float(viewModel.settings.shutterDelay) },
+                    set: { viewModel.updateShutterDelay(TimeInterval($0)) }
+                ),
+                in: 0.1...5.0,
+                step: 0.1
+            )
+
+            Text("Delay before capture after stability confirmed")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var jpegQualityControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("JPEG Quality")
+                Spacer()
+                Text(viewModel.settings.jpegQualityString)
+                    .foregroundColor(.secondary)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { viewModel.settings.jpegQuality },
+                    set: { viewModel.updateJpegQuality($0) }
+                ),
+                in: 0.1...1.0,
+                step: 0.05
+            )
+
+            Text(viewModel.settings.jpegQualityDescription)
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var exposureLockToggle: some View {
+        Toggle("Lock Exposure", isOn: Binding(
+            get: { viewModel.settings.lockExposure },
+            set: { viewModel.updateLockExposure($0) }
+        ))
     }
     
     private var mlSettingsSection: some View {
@@ -260,22 +280,19 @@ struct SettingsView: View {
 
 @MainActor
 class SettingsViewModel: ObservableObject {
-    
     // MARK: - Published Properties
-    
+
     @Published var settings = SessionSettings.default
     @Published var originalSettings = SessionSettings.default
     @Published var showingError = false
     @Published var errorMessage = ""
     
     // MARK: - Computed Properties
-    
-    var hasChanges: Bool {
-        return settings != originalSettings
-    }
-    
+
+    var hasChanges: Bool { settings != originalSettings }
+
     // MARK: - Methods
-    
+
     func loadSettings() {
         // TODO: Load settings from UserDefaults
         settings = SessionSettings.default

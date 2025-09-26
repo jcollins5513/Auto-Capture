@@ -8,7 +8,7 @@
 import SwiftUI
 
 @main
-struct Auto_CaptureApp: App {
+struct AutoCaptureApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

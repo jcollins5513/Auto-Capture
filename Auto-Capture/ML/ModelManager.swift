@@ -103,7 +103,7 @@ final class ModelManager {
         let structureValidation = validateModelStructure(model)
         
         // Check model performance
-        let performanceValidation = try await validateModelPerformance(model)
+        let performanceValidation = await validateModelPerformance(model)
         
         return ModelValidation(
             isValid: sizeValidation.isValid && structureValidation.isValid && performanceValidation.isValid,
@@ -148,9 +148,15 @@ final class ModelManager {
         return ValidationResult(isValid: true, message: "Model structure is valid")
     }
     
-    private func validateModelPerformance(_ model: MLModel) async throws -> ValidationResult {
+    private func validateModelPerformance(_ model: MLModel) async -> ValidationResult {
         // Create a test input
-        let testInput = createTestInput()
+        let testInput: MLFeatureProvider
+        do {
+            testInput = try createTestInput()
+        } catch {
+            let message = "Failed to build test input: \(error.localizedDescription)"
+            return ValidationResult(isValid: false, message: message)
+        }
         
         // Measure inference time
         let startTime = CFAbsoluteTimeGetCurrent()
@@ -171,7 +177,7 @@ final class ModelManager {
         }
     }
     
-    private func createTestInput() -> MLFeatureProvider {
+    private func createTestInput() throws -> MLFeatureProvider {
         // Create a test image feature
         let testImage = createTestImage()
         let imageFeature = MLFeatureValue(pixelBuffer: testImage)
@@ -179,7 +185,7 @@ final class ModelManager {
         let inputName = "image"
         let inputFeatures = [inputName: imageFeature]
         
-        return try! MLDictionaryFeatureProvider(dictionary: inputFeatures)
+        return try MLDictionaryFeatureProvider(dictionary: inputFeatures)
     }
     
     private func createTestImage() -> CVPixelBuffer {

@@ -8,7 +8,7 @@
 import Testing
 @testable import Auto_Capture
 
-struct Auto_CaptureTests {
+struct AutoCaptureTests {
 
     @Test func example() async throws {
         // Write your test here and use APIs like `#expect(...)` to check expected conditions.

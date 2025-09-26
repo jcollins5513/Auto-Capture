@@ -14,14 +14,13 @@ opt_in_rules:
   - empty_string
   - force_unwrapping
   - implicitly_unwrapped_optional
-  - unused_private_declaration
   - vertical_whitespace
   - yoda_condition
   - closure_spacing
+  - closure_body_length
   - comma_inheritance
   - empty_enum_arguments
   - empty_parameters
-  - empty_parentheses
   - extension_access_modifier
   - fallthrough
   - fatal_error_message
@@ -72,7 +71,6 @@ opt_in_rules:
   - vertical_whitespace_closing_braces
   - vertical_whitespace_opening_braces
   - xct_specific_matcher
-  - yoda_condition
 
 # Include specific directories
 included:
@@ -90,13 +88,6 @@ excluded:
   - Auto-Capture.xcworkspace
 
 # Customize rule parameters
-line_length:
-  warning: 120
-  error: 200
-  ignores_urls: true
-  ignores_function_declarations: true
-  ignores_comments: true
-
 function_body_length:
   warning: 50
   error: 100
@@ -136,9 +127,6 @@ nesting:
   type_level:
     warning: 3
     error: 6
-  statement_level:
-    warning: 5
-    error: 10
 
 large_tuple:
   warning: 3
@@ -178,8 +166,8 @@ custom_rules:
   # Ensure SwiftUI views follow naming conventions
   swiftui_view_naming:
     name: "SwiftUI View Naming"
-    regex: 'struct\s+\w+View\s*:'
-    message: "SwiftUI views should end with 'View' and follow proper naming conventions"
+    regex: 'struct\s+(?!\w+View\b)\w+\s*:\s*View'
+    message: "SwiftUI views should end with 'View'"
     severity: warning
 
 # Reporter configuration
@@ -190,7 +178,6 @@ analyzer_rules:
   - explicit_self
   - unused_declaration
   - unused_import
-  - dead_code
 
 # Custom file header for Auto-Capture files
 file_header:
@@ -201,48 +188,3 @@ file_header:
                     \/\/
                     \/\/  Created by .* on \d{1,2}\/\d{1,2}\/\d{4}\.
                     \/\/
-
-# Disable specific rules for test files
-test_file_rules:
-  - Auto-CaptureTests
-  - Auto-CaptureUITests
-  - *Tests.swift
-  - *Test.swift
-
-# Performance optimizations
-performance_rules:
-  - explicit_self
-  - unused_declaration
-  - unused_import
-
-# Security rules
-security_rules:
-  - force_unwrapping
-  - force_cast
-  - force_try
-  - implicitly_unwrapped_optional
-
-# Documentation rules
-documentation_rules:
-  - missing_docs
-  - valid_docs
-
-# SwiftUI specific rules
-swiftui_rules:
-  - modifier_order
-  - multiline_arguments
-  - multiline_function_chains
-  - multiline_parameters
-
-# Core ML specific rules
-coreml_rules:
-  - force_unwrapping
-  - force_cast
-  - force_try
-
-# AVFoundation specific rules
-avfoundation_rules:
-  - force_unwrapping
-  - force_cast
-  - force_try
-  - unused_closure_parameter

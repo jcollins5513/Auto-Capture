@@ -173,7 +173,7 @@ final class QuickstartValidationTests: XCTestCase {
         
         // Verify photo naming
         let photoNames = app.staticTexts.matching(identifier: "Photo Name")
-        XCTAssertTrue(photoNames.count > 0, "Photos should have names")
+        XCTAssertFalse(photoNames.allElementsBoundByIndex.isEmpty, "Photos should have names")
         
         // Check naming pattern
         for i in 0..<photoNames.count {
@@ -199,7 +199,7 @@ final class QuickstartValidationTests: XCTestCase {
         
         // Verify EXIF metadata
         let metadataElements = app.staticTexts.matching(identifier: "EXIF Metadata")
-        XCTAssertTrue(metadataElements.count > 0, "EXIF metadata should be present")
+        XCTAssertFalse(metadataElements.allElementsBoundByIndex.isEmpty, "EXIF metadata should be present")
         
         logger.info("EXIF metadata test completed")
     }
@@ -516,4 +516,3 @@ extension QuickstartValidationTests {
         logger.info("Quickstart validation under stress completed")
     }
 }
-
