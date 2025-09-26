@@ -489,7 +489,7 @@ extension QuickstartValidationTests {
     }
     
     /// Tests quickstart validation under various conditions
-    func testQuickstartValidationUnderStress() throws {
+    func testQuickstartValidationUnderStress() async throws {
         logger.info("Starting quickstart validation under stress")
         
         // Run multiple quickstart tests concurrently
@@ -511,8 +511,9 @@ extension QuickstartValidationTests {
         }
         
         // Wait for all tests to complete
-        try Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+        try await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
         
         logger.info("Quickstart validation under stress completed")
     }
 }
+

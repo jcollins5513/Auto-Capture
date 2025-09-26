@@ -1,0 +1,248 @@
+# SwiftLint Configuration for Auto-Capture
+# This configuration is optimized for iOS development with SwiftUI, AVFoundation, and Core ML
+
+# Disabled rules that are too strict for this project
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - todo
+  - unused_closure_parameter
+
+# Opt-in rules for better code quality
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - unused_private_declaration
+  - vertical_whitespace
+  - yoda_condition
+  - closure_spacing
+  - comma_inheritance
+  - empty_enum_arguments
+  - empty_parameters
+  - empty_parentheses
+  - extension_access_modifier
+  - fallthrough
+  - fatal_error_message
+  - file_header
+  - first_where
+  - force_cast
+  - force_try
+  - function_default_parameter_at_end
+  - identical_operands
+  - implicit_return
+  - last_where
+  - legacy_random
+  - literal_expression_end_indentation
+  - lower_acl_than_parent
+  - modifier_order
+  - multiline_arguments
+  - multiline_function_chains
+  - multiline_literal_brackets
+  - multiline_parameters
+  - multiline_parameters_brackets
+  - no_space_in_method_call
+  - number_separator
+  - object_literal
+  - operator_usage_whitespace
+  - overridden_super_call
+  - override_in_extension
+  - pattern_matching_keywords
+  - prefer_self_type_over_type_of_self
+  - prefer_zero_over_explicit_init
+  - prefixed_toplevel_constant
+  - prohibited_interface_builder
+  - prohibited_super_call
+  - quick_discouraged_call
+  - quick_discouraged_focused_test
+  - quick_discouraged_pending_test
+  - redundant_nil_coalescing
+  - redundant_type_annotation
+  - required_enum_case
+  - single_test_class
+  - sorted_first_last
+  - sorted_imports
+  - strong_iboutlet
+  - switch_case_on_newline
+  - toggle_bool
+  - unneeded_parentheses_in_closure_argument
+  - untyped_error_in_catch
+  - vertical_parameter_alignment_on_call
+  - vertical_whitespace_closing_braces
+  - vertical_whitespace_opening_braces
+  - xct_specific_matcher
+  - yoda_condition
+
+# Include specific directories
+included:
+  - Auto-Capture
+  - Auto-CaptureTests
+  - Auto-CaptureUITests
+
+# Exclude directories that shouldn't be linted
+excluded:
+  - Pods
+  - .build
+  - specs
+  - .specify
+  - Auto-Capture.xcodeproj
+  - Auto-Capture.xcworkspace
+
+# Customize rule parameters
+line_length:
+  warning: 120
+  error: 200
+  ignores_urls: true
+  ignores_function_declarations: true
+  ignores_comments: true
+
+function_body_length:
+  warning: 50
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 500
+
+file_length:
+  warning: 500
+  error: 1000
+
+cyclomatic_complexity:
+  warning: 10
+  error: 20
+
+identifier_name:
+  min_length: 1
+  max_length: 50
+  excluded:
+    - id
+    - url
+    - urlRequest
+    - globalValueKey
+    - x
+    - y
+    - z
+    - i
+    - j
+    - k
+
+type_name:
+  min_length: 3
+  max_length: 40
+
+nesting:
+  type_level:
+    warning: 3
+    error: 6
+  statement_level:
+    warning: 5
+    error: 10
+
+large_tuple:
+  warning: 3
+  error: 4
+
+closure_body_length:
+  warning: 30
+  error: 50
+
+function_parameter_count:
+  warning: 5
+  error: 8
+
+# Custom rules for Auto-Capture specific patterns
+custom_rules:
+  # Ensure proper error handling in async functions
+  async_error_handling:
+    name: "Async Error Handling"
+    regex: 'async\s+func\s+\w+\([^)]*\)\s*\{[^}]*\}'
+    message: "Async functions should include proper error handling"
+    severity: warning
+
+  # Ensure Core ML models are properly handled
+  coreml_model_handling:
+    name: "Core ML Model Handling"
+    regex: 'MLModel|VNCoreMLRequest'
+    message: "Core ML usage should include proper error handling and model validation"
+    severity: warning
+
+  # Ensure AVFoundation usage follows best practices
+  avfoundation_usage:
+    name: "AVFoundation Best Practices"
+    regex: 'AVCaptureSession|AVCaptureDevice|AVCapturePhotoOutput'
+    message: "AVFoundation usage should include proper session management and error handling"
+    severity: warning
+
+  # Ensure SwiftUI views follow naming conventions
+  swiftui_view_naming:
+    name: "SwiftUI View Naming"
+    regex: 'struct\s+\w+View\s*:'
+    message: "SwiftUI views should end with 'View' and follow proper naming conventions"
+    severity: warning
+
+# Reporter configuration
+reporter: "xcode"
+
+# Additional configuration for Auto-Capture project
+analyzer_rules:
+  - explicit_self
+  - unused_declaration
+  - unused_import
+  - dead_code
+
+# Custom file header for Auto-Capture files
+file_header:
+  required_pattern: |
+                    \/\/
+                    \/\/  .*\.swift
+                    \/\/  Auto-Capture
+                    \/\/
+                    \/\/  Created by .* on \d{1,2}\/\d{1,2}\/\d{4}\.
+                    \/\/
+
+# Disable specific rules for test files
+test_file_rules:
+  - Auto-CaptureTests
+  - Auto-CaptureUITests
+  - *Tests.swift
+  - *Test.swift
+
+# Performance optimizations
+performance_rules:
+  - explicit_self
+  - unused_declaration
+  - unused_import
+
+# Security rules
+security_rules:
+  - force_unwrapping
+  - force_cast
+  - force_try
+  - implicitly_unwrapped_optional
+
+# Documentation rules
+documentation_rules:
+  - missing_docs
+  - valid_docs
+
+# SwiftUI specific rules
+swiftui_rules:
+  - modifier_order
+  - multiline_arguments
+  - multiline_function_chains
+  - multiline_parameters
+
+# Core ML specific rules
+coreml_rules:
+  - force_unwrapping
+  - force_cast
+  - force_try
+
+# AVFoundation specific rules
+avfoundation_rules:
+  - force_unwrapping
+  - force_cast
+  - force_try
+  - unused_closure_parameter

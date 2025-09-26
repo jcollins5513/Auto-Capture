@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import OSLog
+@testable import Auto_Capture
 
 /// Crash safety tests for no data loss on termination
 @MainActor
@@ -501,3 +502,4 @@ extension CrashSafetyTests {
         logger.info("Stress crash safety test completed")
     }
 }
+

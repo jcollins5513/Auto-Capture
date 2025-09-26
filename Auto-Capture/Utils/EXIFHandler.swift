@@ -33,7 +33,8 @@ final class EXIFHandler {
         }
         
         // Create mutable copy of image data
-        guard let imageDestination = CGImageDestinationCreateWithData(NSMutableData(), imageType, 1, nil) else {
+        let mutableData = NSMutableData()
+        guard let imageDestination = CGImageDestinationCreateWithData(mutableData, imageType, 1, nil) else {
             throw EXIFError.destinationCreationFailed
         }
         
@@ -89,9 +90,7 @@ final class EXIFHandler {
         }
         
         // Get the final data
-        guard let finalData = CGImageDestinationCreateData(imageDestination) as Data? else {
-            throw EXIFError.dataCreationFailed
-        }
+        let finalData = mutableData as Data
         
         logger.debug("EXIF data written successfully")
         return finalData
@@ -245,7 +244,8 @@ final class EXIFHandler {
             throw EXIFError.invalidImageData
         }
         
-        guard let imageDestination = CGImageDestinationCreateWithData(NSMutableData(), imageType, 1, nil) else {
+        let mutableData = NSMutableData()
+        guard let imageDestination = CGImageDestinationCreateWithData(mutableData, imageType, 1, nil) else {
             throw EXIFError.destinationCreationFailed
         }
         
@@ -256,9 +256,7 @@ final class EXIFHandler {
             throw EXIFError.finalizationFailed
         }
         
-        guard let finalData = CGImageDestinationCreateData(imageDestination) as Data? else {
-            throw EXIFError.dataCreationFailed
-        }
+        let finalData = mutableData as Data
         
         logger.debug("EXIF data stripped successfully")
         return finalData

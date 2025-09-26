@@ -41,7 +41,9 @@ struct LiveCaptureView: View {
             }
         }
         .sheet(isPresented: $showingReview) {
-            ReviewView(session: viewModel.currentSession)
+            if let session = viewModel.currentSession {
+                ReviewView(session: session)
+            }
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -413,21 +415,15 @@ class LiveCaptureViewModel: ObservableObject {
     func skipViewpoint() async {
         guard canSkip else { return }
         
-        do {
-            // TODO: Implement viewpoint skip
-            logger.info("Skipping viewpoint")
-            
-            // Move to next viewpoint
-            if let nextViewpoint = currentViewpoint?.next {
-                currentViewpoint = nextViewpoint
-            } else {
-                // Session complete
-                currentViewpoint = nil
-            }
-            
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+        // TODO: Implement viewpoint skip
+        logger.info("Skipping viewpoint")
+        
+        // Move to next viewpoint
+        if let nextViewpoint = currentViewpoint?.next {
+            currentViewpoint = nextViewpoint
+        } else {
+            // Session complete
+            currentViewpoint = nil
         }
     }
     

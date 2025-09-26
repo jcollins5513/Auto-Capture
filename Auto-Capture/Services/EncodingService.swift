@@ -72,7 +72,8 @@ final class EncodingService {
         }
         
         // Create image destination
-        guard let imageDestination = CGImageDestinationCreateWithData(NSMutableData(), imageType, 1, nil) else {
+        let mutableData = NSMutableData()
+        guard let imageDestination = CGImageDestinationCreateWithData(mutableData, imageType, 1, nil) else {
             throw EncodingError.destinationCreationFailed
         }
         
@@ -101,9 +102,7 @@ final class EncodingService {
         }
         
         // Get final data
-        guard let finalData = CGImageDestinationCreateData(imageDestination) as Data? else {
-            throw EncodingError.dataCreationFailed
-        }
+        let finalData = mutableData as Data
         
         logger.debug("JPEG encoded successfully with quality: \(quality)")
         return finalData
@@ -221,7 +220,8 @@ final class EncodingService {
         }
         
         // Create image destination
-        guard let imageDestination = CGImageDestinationCreateWithData(NSMutableData(), imageType, 1, nil) else {
+        let mutableData = NSMutableData()
+        guard let imageDestination = CGImageDestinationCreateWithData(mutableData, imageType, 1, nil) else {
             throw EncodingError.destinationCreationFailed
         }
         
@@ -248,9 +248,7 @@ final class EncodingService {
         }
         
         // Get final data
-        guard let finalData = CGImageDestinationCreateData(imageDestination) as Data? else {
-            throw EncodingError.dataCreationFailed
-        }
+        let finalData = mutableData as Data
         
         logger.debug("Image compressed successfully to size: \(targetSize.width)x\(targetSize.height)")
         return finalData
@@ -293,7 +291,8 @@ final class EncodingService {
         }
         
         // Create image destination
-        guard let imageDestination = CGImageDestinationCreateWithData(NSMutableData(), imageType, 1, nil) else {
+        let mutableData = NSMutableData()
+        guard let imageDestination = CGImageDestinationCreateWithData(mutableData, imageType, 1, nil) else {
             throw EncodingError.destinationCreationFailed
         }
         
@@ -321,9 +320,7 @@ final class EncodingService {
         }
         
         // Get final data
-        guard let finalData = CGImageDestinationCreateData(imageDestination) as Data? else {
-            throw EncodingError.dataCreationFailed
-        }
+        let finalData = mutableData as Data
         
         logger.debug("Image resized successfully to size: \(size.width)x\(size.height)")
         return finalData
