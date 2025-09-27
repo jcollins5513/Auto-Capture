@@ -8,10 +8,17 @@ struct ReviewView: View {
     // MARK: - Properties
     
     let session: CaptureSession
-    @StateObject private var viewModel = ReviewViewModel()
+    @StateObject private var viewModel: ReviewViewModel
     @Environment(\.dismiss) private var dismiss
     
     private let logger = Logger(subsystem: "AutoCapture", category: "ReviewView")
+    
+    // MARK: - Init
+    
+    init(session: CaptureSession) {
+        self.session = session
+        _viewModel = StateObject(wrappedValue: ReviewViewModel())
+    }
     
     // MARK: - Body
     

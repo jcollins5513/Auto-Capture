@@ -2,6 +2,7 @@ import XCTest
 import CoreML
 import Vision
 import OSLog
+@testable import Auto_Capture
 
 /// On-device latency validation tests
 @MainActor
@@ -259,12 +260,14 @@ final class LatencyTests: XCTestCase {
         try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
         
         let averageLatency = allLatencies.reduce(0, +) / Double(allLatencies.count)
-        let maxLatency = allLatencies.max() ?? 0.0
+        let observedMaxLatency = allLatencies.max() ?? 0.0
         
         XCTAssertLessThanOrEqual(averageLatency, maxLatency,
                                 "Average concurrent inference latency should be less than \(maxLatency * 1000)ms")
+        XCTAssertLessThanOrEqual(observedMaxLatency, maxLatency * 1.5,
+                                "Max concurrent inference latency should be less than \(maxLatency * 1.5 * 1000)ms")
         
-        logger.info("Concurrent inference latency test: avg=\(averageLatency * 1000)ms, max=\(maxLatency * 1000)ms")
+        logger.info("Concurrent inference latency test: avg=\(averageLatency * 1000)ms, max=\(observedMaxLatency * 1000)ms")
     }
     
     // MARK: - Memory Pressure Latency Tests

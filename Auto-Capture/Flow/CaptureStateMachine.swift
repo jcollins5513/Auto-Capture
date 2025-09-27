@@ -32,7 +32,7 @@ final class CaptureStateMachine: CaptureStateMachineProtocol {
     var currentViewpoint: Viewpoint? {
         return _currentViewpoint
     }
-    
+
     var sessionProgress: SessionProgress {
         return _sessionProgress ?? SessionProgress(
             completedViewpoints: [],
@@ -41,6 +41,10 @@ final class CaptureStateMachine: CaptureStateMachineProtocol {
             progressPercentage: 0.0,
             estimatedTimeRemaining: nil
         )
+    }
+
+    var currentSession: CaptureSession? {
+        return _currentSession
     }
     
     // MARK: - Initialization

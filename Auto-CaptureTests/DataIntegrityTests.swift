@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import OSLog
+@testable import Auto_Capture
 
 /// Data integrity tests for zero corrupted files across 1,000 captures
 @MainActor

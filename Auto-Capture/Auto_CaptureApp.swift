@@ -11,7 +11,7 @@ import SwiftUI
 struct AutoCaptureApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            LiveCaptureView()
         }
     }
 }

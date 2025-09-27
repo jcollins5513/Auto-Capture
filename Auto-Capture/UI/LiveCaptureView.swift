@@ -58,7 +58,7 @@ struct LiveCaptureView: View {
     // MARK: - View Components
     
     private var cameraPreviewSection: some View {
-        CameraPreviewView()
+        CameraPreviewView(previewLayer: viewModel.previewLayer)
             .ignoresSafeArea()
     }
     
@@ -286,21 +286,44 @@ struct LiveCaptureView: View {
 // MARK: - Camera Preview View
 
 struct CameraPreviewView: UIViewRepresentable {
-    func makeUIView(context: Context) -> UIView {
-        let view = UIView()
+    let previewLayer: AVCaptureVideoPreviewLayer?
+
+    func makeUIView(context: Context) -> CameraPreviewContainerView {
+        let view = CameraPreviewContainerView()
         view.backgroundColor = .black
-        
-        // TODO: Integrate with CaptureSessionController
-        // This would typically involve:
-        // 1. Getting the preview layer from CaptureSessionController
-        // 2. Adding it to the view
-        // 3. Setting up the preview layer
-        
+        view.updatePreviewLayer(previewLayer)
         return view
     }
-    
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // Update preview if needed
+
+    func updateUIView(_ uiView: CameraPreviewContainerView, context: Context) {
+        uiView.updatePreviewLayer(previewLayer)
+    }
+
+    static func dismantleUIView(_ uiView: CameraPreviewContainerView, coordinator: ()) {
+        uiView.updatePreviewLayer(nil)
+    }
+}
+
+final class CameraPreviewContainerView: UIView {
+    private var activePreviewLayer: AVCaptureVideoPreviewLayer?
+
+    func updatePreviewLayer(_ layer: AVCaptureVideoPreviewLayer?) {
+        guard activePreviewLayer !== layer else { return }
+
+        activePreviewLayer?.removeFromSuperlayer()
+        activePreviewLayer = layer
+
+        guard let layer else { return }
+
+        layer.frame = bounds
+        layer.videoGravity = .resizeAspectFill
+        self.layer.addSublayer(layer)
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        activePreviewLayer?.frame = bounds
     }
 }
 
@@ -308,9 +331,9 @@ struct CameraPreviewView: UIViewRepresentable {
 
 @MainActor
 class LiveCaptureViewModel: ObservableObject {
-    
+
     // MARK: - Published Properties
-    
+
     @Published var currentSession: CaptureSession?
     @Published var currentViewpoint: Viewpoint?
     @Published var classificationResult: ClassificationResult?
@@ -321,118 +344,289 @@ class LiveCaptureViewModel: ObservableObject {
     @Published var stockNumber = ""
     @Published var completedPhotos = 0
     @Published var stabilityProgress: Float = 0.0
-    
+    @Published var previewLayer: AVCaptureVideoPreviewLayer?
+
+    // MARK: - Private Properties
+
+    private let captureSessionController: CaptureSessionController
+    private let sessionStore: SessionStoreProtocol
+    private let settingsStore: SessionSettingsStoreProtocol
+    private let viewpointClassifier: ViewpointClassifierProtocol
+    private let stabilityGate: StabilityGate
+    private let photoCaptureManager: PhotoCaptureManager
+    private let stateMachine: CaptureStateMachineProtocol
+    private var sessionSettings: SessionSettings
+    private var classificationTask: Task<Void, Never>?
+
+    private let logger = Logger(subsystem: "AutoCapture", category: "LiveCaptureViewModel")
+
+    // MARK: - Initialization
+
+    init(
+        captureSessionController: CaptureSessionController = CaptureSessionController(),
+        sessionStore: SessionStoreProtocol = SessionStore(),
+        settingsStore: SessionSettingsStoreProtocol? = nil,
+        viewpointClassifier: ViewpointClassifierProtocol = ViewpointClassifier(),
+        stabilityGate: StabilityGate = StabilityGate()
+    ) {
+        self.captureSessionController = captureSessionController
+        self.sessionStore = sessionStore
+        let resolvedSettingsStore = settingsStore ?? SessionSettingsStore()
+        self.settingsStore = resolvedSettingsStore
+        self.viewpointClassifier = viewpointClassifier
+        self.stabilityGate = stabilityGate
+        self.sessionSettings = resolvedSettingsStore.loadSettings()
+        self.photoCaptureManager = PhotoCaptureManager(
+            captureSessionController: captureSessionController,
+            sessionStore: sessionStore
+        )
+        self.stateMachine = CaptureStateMachine(
+            stabilityGate: stabilityGate,
+            viewpointClassifier: viewpointClassifier,
+            photoCaptureManager: photoCaptureManager,
+            sessionStore: sessionStore
+        )
+        self.previewLayer = captureSessionController.getVideoPreviewLayer()
+
+        bindCallbacks()
+    }
+
+    deinit {
+        classificationTask?.cancel()
+    }
+
     // MARK: - Computed Properties
-    
+
     var canCapture: Bool {
-        return !isLoading && currentSession != nil
+        !isLoading && stateMachine.canCapture()
     }
-    
+
     var canRetake: Bool {
-        return !isLoading && currentSession != nil
+        !isLoading && stateMachine.canRetake()
     }
-    
+
     var canSkip: Bool {
-        return !isLoading && currentSession != nil
+        !isLoading && stateMachine.canSkip()
     }
-    
-    // MARK: - Methods
-    
+
+    // MARK: - Capture Lifecycle
+
     func startCapture() async {
-        isLoading = true
-        
-        do {
-            // TODO: Implement capture start logic
-            // This would typically involve:
-            // 1. Starting the camera session
-            // 2. Starting the ML classification
-            // 3. Setting up the state machine
-            
-            logger.info("Starting live capture")
-            
-            // Simulate initialization
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
-            // Set initial viewpoint
-            currentViewpoint = .frontDriver3rd
-            isDetecting = true
-            
-        } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+        guard !isLoading else { return }
+        let trimmedStockNumber = stockNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedStockNumber.isEmpty else {
+            presentError("Enter a stock number to begin.")
+            return
         }
-        
-        isLoading = false
+
+        stockNumber = trimmedStockNumber
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            sessionSettings = settingsStore.loadSettings()
+            let permissionGranted = await captureSessionController.requestCameraPermission()
+            guard permissionGranted else {
+                presentError("Camera permission is required. Enable access in Settings.")
+                return
+            }
+
+            try await captureSessionController.configureSession()
+            try await captureSessionController.startSession()
+
+            if !viewpointClassifier.isModelLoaded {
+                try await viewpointClassifier.loadModel()
+            }
+
+            stabilityGate.reset()
+            stabilityGate.updateConfiguration(
+                requiredStabilityFrames: sessionSettings.stabilityFrames,
+                confidenceThreshold: sessionSettings.confidenceThreshold
+            )
+
+            try await stateMachine.startSession(stockNumber: trimmedStockNumber, settings: sessionSettings)
+
+            syncSessionState()
+            updateProgress(stateMachine.sessionProgress)
+            isDetecting = true
+
+            startClassificationLoopIfNeeded()
+
+        } catch {
+            logger.error("Failed to start capture: \(error.localizedDescription)")
+            presentError("Unable to start capture. \(error.localizedDescription)")
+        }
     }
-    
+
     func stopCapture() async {
-        // TODO: Implement capture stop logic
-        logger.info("Stopping live capture")
+        classificationTask?.cancel()
+        classificationTask = nil
+
+        do {
+            try await captureSessionController.stopSession()
+        } catch {
+            logger.error("Failed to stop capture: \(error.localizedDescription)")
+        }
     }
-    
+
     func capturePhoto() async {
         guard canCapture else { return }
-        
+
         do {
-            // TODO: Implement photo capture
-            logger.info("Capturing photo")
-            
-            // Simulate capture
-            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
-            
-            completedPhotos += 1
-            
-            // Move to next viewpoint
-            if let nextViewpoint = currentViewpoint?.next {
-                currentViewpoint = nextViewpoint
-            } else {
-                // Session complete
-                currentViewpoint = nil
-            }
-            
+            let photo = try await stateMachine.capturePhoto()
+            logger.info("Captured photo: \(photo.viewpoint.rawValue)")
+            syncSessionState()
         } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+            logger.error("Capture failed: \(error.localizedDescription)")
+            presentError("Capture failed. \(error.localizedDescription)")
         }
     }
-    
+
     func retakePhoto() async {
-        guard canRetake else { return }
-        
+        guard let viewpoint = currentViewpoint, canRetake else { return }
+
         do {
-            // TODO: Implement photo retake
-            logger.info("Retaking photo")
-            
-            // Simulate retake
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-            
+            try await stateMachine.retakePhoto(for: viewpoint)
+            syncSessionState()
         } catch {
-            errorMessage = error.localizedDescription
-            showingError = true
+            logger.error("Retake failed: \(error.localizedDescription)")
+            presentError("Retake failed. \(error.localizedDescription)")
         }
     }
-    
+
     func skipViewpoint() async {
-        guard canSkip else { return }
-        
-        // TODO: Implement viewpoint skip
-        logger.info("Skipping viewpoint")
-        
-        // Move to next viewpoint
-        if let nextViewpoint = currentViewpoint?.next {
-            currentViewpoint = nextViewpoint
-        } else {
-            // Session complete
-            currentViewpoint = nil
+        guard let viewpoint = currentViewpoint, canSkip else { return }
+
+        do {
+            try await stateMachine.skipViewpoint(viewpoint)
+            syncSessionState()
+        } catch {
+            logger.error("Skip failed: \(error.localizedDescription)")
+            presentError("Skip failed. \(error.localizedDescription)")
         }
     }
-    
+
     func cancelSession() async {
-        // TODO: Implement session cancellation
-        logger.info("Cancelling session")
+        classificationTask?.cancel()
+        classificationTask = nil
+
+        do {
+            try await stateMachine.cancelSession()
+            try await captureSessionController.stopSession()
+        } catch {
+            logger.error("Cancel session failed: \(error.localizedDescription)")
+        }
+
+        resetSessionState()
     }
-    
-    private let logger = Logger(subsystem: "AutoCapture", category: "LiveCaptureViewModel")
+
+    // MARK: - Private Helpers
+
+    private func bindCallbacks() {
+        stateMachine.onStateChange = { [weak self] state in
+            guard let self else { return }
+            Task { @MainActor in
+                self.handleStateChange(state)
+            }
+        }
+
+        stateMachine.onProgressUpdate = { [weak self] progress in
+            guard let self else { return }
+            Task { @MainActor in
+                self.updateProgress(progress)
+            }
+        }
+
+        stateMachine.onError = { [weak self] error in
+            guard let self else { return }
+            Task { @MainActor in
+                self.logger.error("State machine error: \(error.localizedDescription)")
+                self.presentError(error.localizedDescription)
+            }
+        }
+
+        captureSessionController.onError = { [weak self] error in
+            guard let self else { return }
+            Task { @MainActor in
+                self.logger.error("Camera error: \(error.localizedDescription)")
+                self.presentError(error.localizedDescription)
+            }
+        }
+
+        sessionStore.onStorageFull = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in
+                self.presentError("Storage is full. Free up space to continue capturing.")
+            }
+        }
+
+        sessionStore.onStorageError = { [weak self] storageError in
+            guard let self else { return }
+            Task { @MainActor in
+                self.presentError(storageError.localizedDescription)
+            }
+        }
+    }
+
+    private func handleStateChange(_ state: CaptureState) {
+        switch state {
+        case .detecting, .stable, .sessionActive:
+            isDetecting = true
+        case .capturing, .retaking:
+            isDetecting = false
+        case .completed:
+            isDetecting = false
+            syncSessionState()
+        case .idle, .cancelled:
+            isDetecting = false
+        case .error(let error):
+            isDetecting = false
+            presentError(error.localizedDescription)
+        }
+    }
+
+    private func updateProgress(_ progress: SessionProgress) {
+        completedPhotos = progress.completedViewpoints.count
+        currentViewpoint = progress.currentViewpoint ?? stateMachine.currentViewpoint
+        stabilityProgress = currentViewpoint.flatMap { stabilityGate.getStabilityProgress(for: $0) } ?? 0.0
+        syncSessionState()
+    }
+
+    private func syncSessionState() {
+        currentSession = stateMachine.currentSession
+        currentViewpoint = stateMachine.currentViewpoint
+    }
+
+    private func resetSessionState() {
+        currentSession = nil
+        currentViewpoint = nil
+        classificationResult = nil
+        completedPhotos = 0
+        stabilityProgress = 0.0
+        isDetecting = false
+        stockNumber = ""
+        stabilityGate.reset()
+    }
+
+    private func presentError(_ message: String) {
+        errorMessage = message
+        showingError = true
+    }
+
+    private func startClassificationLoopIfNeeded() {
+        guard classificationTask == nil else { return }
+        classificationTask = Task { [weak self] in
+            guard let self else { return }
+            await self.runClassificationLoop()
+        }
+    }
+
+    private func runClassificationLoop() async {
+        // Classification loop will be implemented when video data output is wired.
+        logger.debug("Classification loop not yet implemented")
+        classificationTask = nil
+    }
 }
 
 // MARK: - Preview

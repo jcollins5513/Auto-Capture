@@ -2,6 +2,7 @@ import XCTest
 import AVFoundation
 import CoreML
 import OSLog
+@testable import Auto_Capture
 
 /// Performance tests for 30fps preview and ML inference
 @MainActor

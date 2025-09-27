@@ -1,6 +1,7 @@
 import XCTest
 import Foundation
 import OSLog
+@testable import Auto_Capture
 
 /// Edge case tests for poor lighting, partial occlusion, and other challenging conditions
 @MainActor

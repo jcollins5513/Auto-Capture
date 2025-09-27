@@ -49,7 +49,7 @@ final class Exporter {
     private func exportToFiles(_ session: CaptureSession) async throws -> ExportResult {
         // Create ZIP file
         let zipURL = try await createZipFile(for: session)
-        
+
         // Copy to Files app
         let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first!
         let filesURL = documentsURL.appendingPathComponent("Auto-Capture Exports")
@@ -89,11 +89,11 @@ final class Exporter {
     
     private func createZipFile(for session: CaptureSession) async throws -> URL {
         let sessionDirectory = sessionStore.getSessionDirectoryURL(for: session)
-        let zipURL = sessionDirectory.appendingPathComponent("\(session.stockNumber)-\(session.id.uuidString).zip")
-        
+        let zipURL = sessionDirectory.appendingPathComponent(zipFileName(for: session))
+
         // Create ZIP file
         try await createZipFile(from: sessionDirectory, to: zipURL)
-        
+
         logger.info("Created ZIP file: \(zipURL.lastPathComponent)")
         return zipURL
     }
@@ -102,16 +102,45 @@ final class Exporter {
         return try await withCheckedThrowingContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
                 do {
-                    // Use system zip command for better performance
-                    // For now, use a simple file copy approach
-                    // TODO: Implement proper zip functionality
-                    try FileManager.default.copyItem(at: sourceDirectory, to: destinationURL)
+                    if self.fileManager.fileExists(atPath: destinationURL.path) {
+                        try self.fileManager.removeItem(at: destinationURL)
+                    }
+
+                    guard let enumerator = self.fileManager.enumerator(
+                        at: sourceDirectory,
+                        includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey],
+                        options: [.skipsHiddenFiles]
+                    ) else {
+                        continuation.resume(throwing: ExportError.fileSystemError)
+                        return
+                    }
+
+                    var entries: [ZipEntry] = []
+                    for case let fileURL as URL in enumerator {
+                        let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .contentModificationDateKey])
+                        guard values.isRegularFile == true else { continue }
+                        let relativePath = fileURL.path.replacingOccurrences(of: sourceDirectory.path + "/", with: "")
+                        let data = try Data(contentsOf: fileURL)
+                        let modificationDate = values.contentModificationDate ?? Date()
+                        entries.append(ZipEntry(name: relativePath, data: data, modificationDate: modificationDate))
+                    }
+
+                    let zipData = try self.buildZipData(from: entries)
+                    try zipData.write(to: destinationURL, options: .atomic)
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: ExportError.zipCreationFailed)
                 }
             }
         }
+    }
+
+    private func zipFileName(for session: CaptureSession) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        let timestamp = formatter.string(from: session.createdAt)
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        return "\(session.stockNumber)-\(timestamp)-v\(version).zip"
     }
     
     // MARK: - Export Validation
@@ -176,6 +205,132 @@ final class Exporter {
         }
     }
 }
+
+// MARK: - ZIP Utilities
+
+private extension Exporter {
+    struct ZipEntry {
+        let name: String
+        let data: Data
+        let modificationDate: Date
+    }
+
+    func buildZipData(from entries: [ZipEntry]) throws -> Data {
+        var localFileSection = Data()
+        var centralDirectory = Data()
+        for entry in entries {
+            let nameData = Data(entry.name.utf8)
+            let crc = entry.data.crc32()
+            let (dosTime, dosDate) = dosDateTime(from: entry.modificationDate)
+            let localHeaderOffset = UInt32(localFileSection.count)
+
+            // Local file header
+            localFileSection.append(UInt32(0x04034B50))
+            localFileSection.append(UInt16(20))
+            localFileSection.append(UInt16(0))
+            localFileSection.append(UInt16(0))
+            localFileSection.append(dosTime)
+            localFileSection.append(dosDate)
+            localFileSection.append(crc)
+            localFileSection.append(UInt32(entry.data.count))
+            localFileSection.append(UInt32(entry.data.count))
+            localFileSection.append(UInt16(nameData.count))
+            localFileSection.append(UInt16(0))
+            localFileSection.append(nameData)
+            localFileSection.append(entry.data)
+
+            // Central directory header
+            centralDirectory.append(UInt32(0x02014B50))
+            centralDirectory.append(UInt16(0x0314))
+            centralDirectory.append(UInt16(20))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(dosTime)
+            centralDirectory.append(dosDate)
+            centralDirectory.append(crc)
+            centralDirectory.append(UInt32(entry.data.count))
+            centralDirectory.append(UInt32(entry.data.count))
+            centralDirectory.append(UInt16(nameData.count))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(UInt16(0))
+            centralDirectory.append(UInt32(0))
+            centralDirectory.append(localHeaderOffset)
+            centralDirectory.append(nameData)
+        }
+
+        let centralDirectoryOffset = UInt32(localFileSection.count)
+        let centralDirectorySize = UInt32(centralDirectory.count)
+
+        var endRecord = Data()
+        endRecord.append(UInt32(0x06054B50))
+        endRecord.append(UInt16(0))
+        endRecord.append(UInt16(0))
+        endRecord.append(UInt16(entries.count))
+        endRecord.append(UInt16(entries.count))
+        endRecord.append(centralDirectorySize)
+        endRecord.append(centralDirectoryOffset)
+        endRecord.append(UInt16(0))
+
+        var zipData = Data(capacity: localFileSection.count + centralDirectory.count + endRecord.count)
+        zipData.append(localFileSection)
+        zipData.append(centralDirectory)
+        zipData.append(endRecord)
+        return zipData
+    }
+
+    func dosDateTime(from date: Date) -> (UInt16, UInt16) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+
+        let year = UInt16(max(1980, min(2107, components.year ?? 1980)))
+        let month = UInt16(components.month ?? 1)
+        let day = UInt16(components.day ?? 1)
+        let hour = UInt16(components.hour ?? 0)
+        let minute = UInt16(components.minute ?? 0)
+        let second = UInt16((components.second ?? 0) / 2)
+
+        let dosDate = ((year - 1980) << 9) | (month << 5) | day
+        let dosTime = (hour << 11) | (minute << 5) | second
+        return (UInt16(dosTime), UInt16(dosDate))
+    }
+}
+
+private extension Data {
+    mutating func append<T: FixedWidthInteger>(_ value: T) {
+        var littleEndianValue = value.littleEndian
+        Swift.withUnsafeBytes(of: &littleEndianValue) { buffer in
+            append(contentsOf: buffer)
+        }
+    }
+}
+
+private extension Data {
+    func crc32() -> UInt32 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in self {
+            let index = Int((crc ^ UInt32(byte)) & 0xFF)
+            crc = (crc >> 8) ^ CRC32Table[index]
+        }
+        return crc ^ 0xFFFF_FFFF
+    }
+}
+
+private let CRC32Table: [UInt32] = {
+    (0..<256).map { index -> UInt32 in
+        var crc = UInt32(index)
+        for _ in 0..<8 {
+            if crc & 1 == 1 {
+                crc = (crc >> 1) ^ 0xEDB88320
+            } else {
+                crc >>= 1
+            }
+        }
+        return crc
+    }
+}()
 
 // MARK: - Supporting Types
 

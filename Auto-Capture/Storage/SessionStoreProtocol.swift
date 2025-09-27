@@ -3,7 +3,7 @@
 
 import Foundation
 
-protocol SessionStoreProtocol {
+protocol SessionStoreProtocol: AnyObject {
     // Session management
     func createSession(stockNumber: String) async throws -> CaptureSession
     func loadSession(id: UUID) async throws -> CaptureSession?

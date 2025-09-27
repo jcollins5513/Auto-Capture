@@ -389,6 +389,7 @@ private class MockStateMachine: CaptureStateMachineProtocol {
         progressPercentage: 0.0,
         estimatedTimeRemaining: nil
     )
+    var currentSession: CaptureSession? = nil
     
     var onStateChange: ((CaptureState) -> Void)? = nil
     var onProgressUpdate: ((SessionProgress) -> Void)? = nil

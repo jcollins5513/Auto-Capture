@@ -13,10 +13,17 @@ import SwiftUI
 struct SettingsView: View {
     // MARK: - Properties
 
-    @StateObject private var viewModel = SettingsViewModel()
+    @StateObject private var viewModel: SettingsViewModel
     @Environment(\.dismiss) private var dismiss
     
     private let logger = Logger(subsystem: "AutoCapture", category: "SettingsView")
+    
+    // MARK: - Init
+
+    init(settingsStore: SessionSettingsStoreProtocol? = nil) {
+        let resolvedStore = settingsStore ?? SessionSettingsStore()
+        _viewModel = StateObject(wrappedValue: SettingsViewModel(settingsStore: resolvedStore))
+    }
     
     // MARK: - Body
     
@@ -285,10 +292,12 @@ struct SettingsView: View {
 class SettingsViewModel: ObservableObject {
     // MARK: - Published Properties
 
-    @Published var settings = SessionSettings.default
-    @Published var originalSettings = SessionSettings.default
+    @Published var settings: SessionSettings
+    @Published var originalSettings: SessionSettings
     @Published var showingError = false
     @Published var errorMessage = ""
+    
+    private let settingsStore: SessionSettingsStoreProtocol
     
     // MARK: - Computed Properties
 
@@ -296,16 +305,25 @@ class SettingsViewModel: ObservableObject {
 
     // MARK: - Methods
 
+    init(settingsStore: SessionSettingsStoreProtocol? = nil) {
+        let resolvedStore = settingsStore ?? SessionSettingsStore()
+        self.settingsStore = resolvedStore
+        let stored = resolvedStore.loadSettings()
+        self.settings = stored
+        self.originalSettings = stored
+        logger.info("SettingsViewModel initialized with stored settings")
+    }
+
     func loadSettings() {
-        // TODO: Load settings from UserDefaults
-        settings = SessionSettings.default
-        originalSettings = settings
+        let stored = settingsStore.loadSettings()
+        settings = stored
+        originalSettings = stored
         logger.info("Settings loaded")
     }
-    
+
     func saveSettings() async {
         do {
-            // TODO: Save settings to UserDefaults
+            try settingsStore.saveSettings(settings)
             logger.info("Settings saved")
             originalSettings = settings
         } catch {

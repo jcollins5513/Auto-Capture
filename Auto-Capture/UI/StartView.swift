@@ -12,17 +12,29 @@ import SwiftUI
 struct StartView: View {
     // MARK: - Properties
 
-    @StateObject private var viewModel = StartViewModel()
+    @StateObject private var viewModel: StartViewModel
     @State private var showingSettings = false
     @State private var showingSessionHistory = false
 
+    private let settingsStore: SessionSettingsStoreProtocol
     private let logger = Logger(subsystem: "AutoCapture", category: "StartView")
+
+    // MARK: - Init
+
+    init(settingsStore: SessionSettingsStoreProtocol? = nil) {
+        let resolvedStore = settingsStore ?? SessionSettingsStore()
+        self.settingsStore = resolvedStore
+        _viewModel = StateObject(wrappedValue: StartViewModel(settingsStore: resolvedStore))
+    }
 
     // MARK: - Body
 
     var body: some View {
         NavigationView {
             mainContent
+        }
+        .onAppear {
+            viewModel.refreshSettings()
         }
     }
 
@@ -69,7 +81,7 @@ struct StartView: View {
     }
 
     private func settingsSheetContent() -> SettingsView {
-        SettingsView()
+        SettingsView(settingsStore: settingsStore)
     }
 
     private func sessionHistorySheetContent() -> SessionHistoryView {
@@ -215,10 +227,12 @@ class StartViewModel: ObservableObject {
 
     @Published var stockNumber = ""
     @Published var stockNumberError = ""
-    @Published var settings = SessionSettings.default
+    @Published private(set) var settings: SessionSettings
     @Published var showingError = false
     @Published var errorMessage = ""
     @Published var isLoading = false
+    
+    private let settingsStore: SessionSettingsStoreProtocol
     
     // MARK: - Computed Properties
     
@@ -226,7 +240,19 @@ class StartViewModel: ObservableObject {
         !stockNumber.isEmpty && stockNumberError.isEmpty && !isLoading
     }
     
+    // MARK: - Init
+
+    init(settingsStore: SessionSettingsStoreProtocol? = nil) {
+        let resolvedStore = settingsStore ?? SessionSettingsStore()
+        self.settingsStore = resolvedStore
+        self.settings = resolvedStore.loadSettings()
+    }
+
     // MARK: - Methods
+
+    func refreshSettings() {
+        settings = settingsStore.loadSettings()
+    }
     
     func validateStockNumber(_ stockNumber: String) {
         if stockNumber.isEmpty {
@@ -258,7 +284,7 @@ class StartViewModel: ObservableObject {
             // 2. Navigating to LiveCaptureView
             // 3. Starting the capture process
             
-            logger.info("Starting session for stock number: \(self.stockNumber)")
+            logger.info("Starting session for stock number: \(self.stockNumber, privacy: .public)")
             
             // Simulate session start
             try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second

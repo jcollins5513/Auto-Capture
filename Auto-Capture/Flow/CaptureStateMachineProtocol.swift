@@ -3,11 +3,12 @@
 
 import Foundation
 
-protocol CaptureStateMachineProtocol {
+protocol CaptureStateMachineProtocol: AnyObject {
     // State management
     var currentState: CaptureState { get }
     var currentViewpoint: Viewpoint? { get }
     var sessionProgress: SessionProgress { get }
+    var currentSession: CaptureSession? { get }
     
     // Session control
     func startSession(stockNumber: String, settings: SessionSettings) async throws
