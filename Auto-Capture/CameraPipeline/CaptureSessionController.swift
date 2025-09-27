@@ -35,8 +35,10 @@ final class CaptureSessionController: NSObject, CaptureSessionControllerProtocol
     }
     
     deinit {
-        Task {
-            try? await stopSession()
+        sessionQueue.sync {
+            if captureSession.isRunning {
+                captureSession.stopRunning()
+            }
         }
     }
     
@@ -280,14 +282,14 @@ final class CaptureSessionController: NSObject, CaptureSessionControllerProtocol
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(sessionInterruptionEnded),
-            name: .AVCaptureSessionInterruptionEnded,
+            name: AVCaptureSession.interruptionEndedNotification,
             object: captureSession
         )
         
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(sessionRuntimeError),
-            name: .AVCaptureSessionRuntimeError,
+            name: AVCaptureSession.runtimeErrorNotification,
             object: captureSession
         )
     }

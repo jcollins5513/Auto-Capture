@@ -1,6 +1,7 @@
 import SwiftUI
 import OSLog
 import Combine
+import UIKit
 
 /// SwiftUI view for reviewing captured photos and exporting sessions
 struct ReviewView: View {
@@ -15,9 +16,18 @@ struct ReviewView: View {
     
     // MARK: - Init
     
-    init(session: CaptureSession) {
+    init(
+        session: CaptureSession,
+        sessionStore: SessionStoreProtocol = SessionStore()
+    ) {
         self.session = session
-        _viewModel = StateObject(wrappedValue: ReviewViewModel())
+        let exporter = Exporter(sessionStore: sessionStore)
+        _viewModel = StateObject(
+            wrappedValue: ReviewViewModel(
+                sessionStore: sessionStore,
+                exporter: exporter
+            )
+        )
     }
     
     // MARK: - Body
@@ -73,8 +83,23 @@ struct ReviewView: View {
                 Text(viewModel.errorMessage)
             }
         }
+        .sheet(item: $viewModel.shareURL) { shareURL in
+            ShareSheet(activityItems: [shareURL])
+        }
+        .alert(viewModel.successMessage ?? "", isPresented: Binding(
+            get: { viewModel.successMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    viewModel.successMessage = nil
+                }
+            }
+        )) {
+            Button("OK") { }
+        }
         .onAppear {
-            viewModel.setSession(session)
+            Task {
+                await viewModel.setSession(session)
+            }
         }
     }
     
@@ -246,7 +271,9 @@ struct ReviewView: View {
                 Spacer()
                 
                 Button(action: {
-                    viewModel.showingExportAlert = true
+                    Task {
+                        await viewModel.exportSession()
+                    }
                 }) {
                     HStack {
                         Image(systemName: "square.and.arrow.up")
@@ -289,6 +316,8 @@ class ReviewViewModel: ObservableObject {
     @Published var showingExportAlert = false
     @Published var showingError = false
     @Published var errorMessage = ""
+    @Published var shareURL: URL?
+    @Published var successMessage: String?
     
     // MARK: - Computed Properties
     
@@ -298,24 +327,40 @@ class ReviewViewModel: ObservableObject {
     
     // MARK: - Methods
     
-    func setSession(_ session: CaptureSession) {
+    private let sessionStore: SessionStoreProtocol
+    private let exporter: Exporter
+    private let logger = Logger(subsystem: "AutoCapture", category: "ReviewViewModel")
+
+    init(sessionStore: SessionStoreProtocol, exporter: Exporter) {
+        self.sessionStore = sessionStore
+        self.exporter = exporter
+    }
+
+    func setSession(_ session: CaptureSession) async {
         currentSession = session
+
+        do {
+            if let stored = try await sessionStore.loadSession(id: session.id) {
+                currentSession = stored
+            }
+        } catch {
+            logger.error("Failed to load session: \(error.localizedDescription)")
+        }
     }
     
     func exportSession() async {
         guard let session = currentSession else { return }
         
-        isExporting = true
-        
         do {
-            // TODO: Implement session export
-            logger.info("Exporting session: \(session.id.uuidString)")
-            
-            // Simulate export
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
+            isExporting = true
+            let validation = try await exporter.validateExport(session)
+            guard validation.isValid else {
+                errorMessage = validation.issues.joined(separator: "\n")
+                showingError = true
+                isExporting = false
+                return
+            }
             showingExportAlert = true
-            
         } catch {
             errorMessage = error.localizedDescription
             showingError = true
@@ -325,16 +370,34 @@ class ReviewViewModel: ObservableObject {
     }
     
     func exportToShareSheet() async {
-        // TODO: Implement Share Sheet export
-        logger.info("Exporting to Share Sheet")
+        guard let session = currentSession else { return }
+        isExporting = true
+        do {
+            let result = try await exporter.exportSession(session, to: .shareSheet)
+            shareURL = result.fileURL
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
+        isExporting = false
     }
     
     func exportToFiles() async {
-        // TODO: Implement Files app export
-        logger.info("Exporting to Files app")
+        guard let session = currentSession else { return }
+        isExporting = true
+        do {
+            let result = try await exporter.exportSession(session, to: .files)
+            if let url = result.fileURL {
+                successMessage = "Exported to Files: \(url.lastPathComponent)"
+            } else {
+                successMessage = "Export complete."
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+            showingError = true
+        }
+        isExporting = false
     }
-    
-    private let logger = Logger(subsystem: "AutoCapture", category: "ReviewViewModel")
 }
 
 // MARK: - Preview
@@ -348,4 +411,20 @@ struct ReviewView_Previews: PreviewProvider {
         
         ReviewView(session: sampleSession)
     }
+}
+
+// MARK: - Share Sheet Helper
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) { }
+}
+
+extension URL: Identifiable {
+    public var id: String { absoluteString }
 }
